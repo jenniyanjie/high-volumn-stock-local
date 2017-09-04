@@ -3,6 +3,14 @@
 Created on Sun May 29 17:19:35 2016
 
 @author: Jennifer
+
+pre-requisite:
+    
+1. install pattern library: 
+    https://www.clips.uantwerpen.be/pages/pattern-web
+2. install simplejson library:
+    https://pypi.python.org/pypi/simplejson/
+    
 """
 from __future__ import division
 import sys, os, errno, urllib2, pdb
@@ -20,11 +28,6 @@ from matplotlib.finance import candlestick_ohlc
 import pylab
 matplotlib.rcParams.update({'font.size': 9})
 
-if len(sys.argv) >= 2:
-    writeDir = sys.argv[1]
-else:
-#    writeDir = os.getcwd()
-    writeDir = '/Users/Jennifer/Google Drive/highVolumnStock' # for mac usage
 
 def stockScreener(exchange = 'SGX', op_all = False, op_sele = True, workDir = os.getcwd()):
     '''
@@ -359,8 +362,11 @@ def graphStock(stock, MA1, MA2, writeDir = os.getcwd()):
 
 #%% main
 if __name__ == "__main__":
-    writeDir = '/Users/Jennifer/Google Drive/highVolumnStock' # for Jennifer's mac usage
-#    writeDir = os.getcwd()
+
+    currentPath = os.path.abspath(os.path.dirname(sys.argv[0])) # the path of current file
+    writeDir = os.path.abspath(os.path.join(currentPath, '..')) # the parent directory
+#    print(currentPath)
+#    print(writeDir)
 
     #SGX --------------------------------------------------------------------#
     sgx_symb = stockScreener(exchange = 'SGX', workDir = writeDir, op_all = True)
