@@ -12,12 +12,14 @@ pre-requisite:
     https://pypi.python.org/pypi/simplejson/
     
 """
-from __future__ import division
+from __future__ import division, print_function
 import sys, os, errno, urllib2, pdb
 from re import sub
-from datetime import datetime
+from datetime import datetime, timedelta
+from datetime import date as dtlib
 from time import time
 from google_screener_data_extract import GoogleStockDataExtract
+from yahoo_quote_download import yqd
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -29,12 +31,12 @@ import pylab
 matplotlib.rcParams.update({'font.size': 9})
 
 
-def stockScreener(exchange = 'SGX', op_all = False, op_sele = True, workDir = os.getcwd()):
+def stockScreener(exchange = 'SGX', ratio_threshold = 2, op_all = False, op_sele = True, workDir = os.getcwd()):
     '''
     exchange: 'SGX' or 'HKG'
     return: a list of stock symbols
     '''
-#    suffix = {'SGX':'.SI', 'HKG': '.HK'}
+    suffix = {'SGX':'.SI', 'HKG': '.HK'}
 
     h = GoogleStockDataExtract(exchange)
     h.retrieve_all_stock_data()
@@ -56,7 +58,7 @@ def stockScreener(exchange = 'SGX', op_all = False, op_sele = True, workDir = os
     #selection:
     h_df['ratio'] = h_df['Volume'] / h_df['AverageVolume']
 
-    sele = h_df.loc[((h_df['ratio'] >= 2) & (h_df['QuotePercChange'] > 0) & \
+    sele = h_df.loc[((h_df['ratio'] >= ratio_threshold) & (h_df['QuotePercChange'] > 0) & \
                     (h_df['QuoteLast'] > h_df['PriceAverage_50Day']) & \
                     (h_df['TotalDebtToEquityQuarter'] < 100)), ]
                     
@@ -75,88 +77,9 @@ def stockScreener(exchange = 'SGX', op_all = False, op_sele = True, workDir = os
                 if exc.errno != errno.EEXIST:
                     raise
         sele.to_csv(op_f_sele, index = False)
-#    symbols = [symb + suffix[exchange] for symb in sele['SYMBOL'].tolist()]
-    symbols = [exchange + ':' + symb  for symb in sele['SYMBOL'].tolist()]
-
+    symbols = [symb + suffix[exchange] for symb in sele['SYMBOL'].tolist()]
     return symbols
 
-#TODO: select data based on creteria, get the symbo list, print the selected df
-
-def volume_scanner(workDir = os.getcwd()):
-    '''
-    download stock data from yahoo finance and select stock based on creteria
-    save the selected stock symbol to resultStk
-    '''
-    stknm = ''
-    resultStk = []
-    reader = open(os.getcwd() + '/SGX.txt','r')
-    print 'symbol volume avg_vol price prev_clo 50_avg ratio'
-    for i,line in enumerate(reader, start=1):
-        if not line.startswith('Symbol'):
-            symbol = line.rstrip().split('\t')[0]+'.SI'
-            stknm += symbol +'+'
-            if i%200 == 0:
-                urlToVisit = 'http://finance.yahoo.com/d/quotes.csv?s=' +\
-                            stknm[:-1] + '&f=sva2l1pm3'
-                stknm = ''
-                sourceCode = urllib2.urlopen(urlToVisit).read()
-                splitSource = sourceCode.split('\n')
-                for eachLine in splitSource:
-                    splitLine = eachLine.split(',')
-                    if len(splitLine) == 6 and 'N/A' not in splitLine:
-                        symb = sub(r'^"|"$', '', splitLine[0])
-                        v = int(splitLine[1])
-                        avg_daily_v = int(splitLine[2])
-                        last_p = float(splitLine[3])
-                        prvi_clo = float(splitLine[4])
-                        avg50 = float(splitLine[5])
-                        ratio = v/avg_daily_v
-                        if ratio > 6 and last_p > prvi_clo and last_p > avg50:
-                            resultStk.append(symb)
-                            print symb, v, avg_daily_v, last_p, prvi_clo, avg50, '{0:.2f}'.format(ratio)
-    # the left-over
-    urlToVisit = 'http://finance.yahoo.com/d/quotes.csv?s=' +\
-                stknm[:-1] + '&f=sva2l1pm3'
-    sourceCode = urllib2.urlopen(urlToVisit).read()
-    splitSource = sourceCode.split('\n')
-    for eachLine in splitSource:
-        splitLine = eachLine.split(',')
-        if len(splitLine) == 6 and 'N/A' not in splitLine:
-            symb = sub(r'^"|"$', '', splitLine[0])
-            v = int(splitLine[1])
-            avg_daily_v = int(splitLine[2])
-            last_p = float(splitLine[3])
-            prvi_clo = float(splitLine[4])
-            avg50 = float(splitLine[5])
-            ratio = v/avg_daily_v
-            if ratio > 6 and last_p > prvi_clo and last_p > avg50:
-                resultStk.append(symb)
-                print symb, v, avg_daily_v, last_p, prvi_clo, avg50, '{0:.2f}'.format(ratio)
-    print 'totally get {} SGX stock name!'.format(i-1)
-    print 'scanned {} stock(s) with marvelous volume!'.format(len(resultStk))
-    reader.close()
-    # download the details of the result stock
-    urlToVisit = 'http://finance.yahoo.com/d/quotes.csv?s='
-    for symb in resultStk:
-        urlToVisit += symb + '+'
-    urlToVisit = urlToVisit[:-1] + \
-                '&f=snpohgd1t1l1kjm3m4va2k3ydr1qj1eb4j4p5p6rr5s7'
-    response = urllib2.urlopen(urlToVisit).read()
-    # write result to csv
-    resultF = workDir + '/checkHighVolume_'+datetime.now().strftime('%Y-%m-%d-%H-%M')+'.csv'
-    writer = open(resultF, 'w')
-    writer.write('Symbol,Stock_name,Previous_close,Open,'\
-                  'Daily_high,Daily_low,'\
-                  'Last_trade_date,Last_trade_time,Last_trade_price,'\
-                  '52_week_high,52_week_low,'\
-                  '50_day_moving_average,100_day_moving_average,'\
-                  'Volume,Average_daily_volume,Lasts_trade_size,'\
-                  'Divident_yield,Divident_per_share,Divident_pay_date,Ex_divident_date,'\
-                  'Market_cap,EPS,'\
-                  'Book_value,EBITDA,P/S,P/B,P/E,PEG,short_ratio\n')
-    writer.write(response)
-    writer.close()
-    return resultStk
 
 #%% for ploting
 def rsiFunc(prices, n=14):
@@ -213,30 +136,18 @@ def graphStock(stock, MA1, MA2, writeDir = os.getcwd()):
     '''
     # pulling data
     try:
-        print 'Currently Pulling', stock, '...'
-#        print str(datetime.fromtimestamp(int(time())).strftime('%Y-%m-%d %H:%M:%S'))
-#        urlToVisit = 'http://chartapi.finance.yahoo.com/instrument/1.0/'+stock+'/chartdata;type=quote;range=1y/csv'
-        urlToVisit = 'http://www.google.com/finance/historical?q='+stock.lower()+'&output=csv'
-        stockFile =[]
-        try:
-            sourceCode = urllib2.urlopen(urlToVisit).read()
-            splitSource = sourceCode.split('\n')
-            for eachLine in reversed(splitSource):
-                splitLine = eachLine.split(',')
-                if len(splitLine)==6 and not splitLine[-1].lower().endswith('volume'):
-                    if len(splitLine[0]) == 8:
-                        eachLine = '0' + eachLine
-                    stockFile.append(eachLine)
-        except Exception, e:
-            print str(e), 'failed to organize pulled data.'
+        print('Currently Pulling', stock, '...')
+        startDate = (dtlib.today() - timedelta(days = 365)).strftime("%Y%m%d")
+        endDate = dtlib.today().strftime("%Y%m%d")
+        stockFile = yqd.load_yahoo_quote(stock, startDate, endDate)
+        stockFile = sorted(list(set([i for i in stockFile[1:] if not 'null' in i]))) # data cleanning, this API is really bad in data
     except Exception,e:
-        print str(e), 'failed to pull pricing data'
+        print(str(e), 'failed to pull pricing data')
     # plot
     try:
-#        date, closep, highp, lowp, openp, volume = np.loadtxt(stockFile,delimiter=',', unpack=True,
-#                                                              converters={ 0: mdates.strpdate2num('%Y%m%d')})
-        date, openp, highp, lowp, closep, volume = np.loadtxt(stockFile,delimiter=',', unpack=True,
-                                                              converters={ 0: mdates.strpdate2num('%d-%b-%y')})
+        date, openp, highp, lowp, closep, closeadjp, volume = np.loadtxt(stockFile,delimiter=',', 
+                                                                         unpack=True, 
+                                                                         converters={ 0: mdates.strpdate2num('%Y-%m-%d')})
         x = 0
         y = len(date)
         newAr = []
@@ -356,7 +267,7 @@ def graphStock(stock, MA1, MA2, writeDir = os.getcwd()):
         fig.savefig(figNm, dpi = 900, facecolor=fig.get_facecolor())
         plt.close('all')
     except Exception,e:
-        print 'main loop:',str(e)
+        print('main loop:',str(e))
 
     return
 
@@ -369,13 +280,17 @@ if __name__ == "__main__":
 #    print(writeDir)
 
     #SGX --------------------------------------------------------------------#
-    sgx_symb = stockScreener(exchange = 'SGX', workDir = writeDir, op_all = True)
+    sgx_symb = stockScreener(exchange = 'SGX', ratio_threshold = 2, workDir = writeDir, op_all = True)
 
     #HKG --------------------------------------------------------------------#
-    hkg_symb = stockScreener(exchange = 'HKG', workDir = writeDir, op_all = True)
+    hkg_symb = stockScreener(exchange = 'HKG', ratio_threshold = 6, workDir = writeDir, op_all = True)
 
     symbols = sgx_symb + hkg_symb
+    print('selected result: ', symbols)
     # plot the result -------------------------------------------------------#
-#   for symb in symbols:
-#       graphStock(symb, 50, 100, writeDir)
+    for symb in symbols:
+        graphStock(symb, 50, 100, writeDir)
+    
+    symb = "2080.HK"
+    graphStock(symb, 50, 100, writeDir)
 
