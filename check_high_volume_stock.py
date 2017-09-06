@@ -283,14 +283,12 @@ if __name__ == "__main__":
     sgx_symb = stockScreener(exchange = 'SGX', ratio_threshold = 2, workDir = writeDir, op_all = True)
 
     #HKG --------------------------------------------------------------------#
-    hkg_symb = stockScreener(exchange = 'HKG', ratio_threshold = 6, workDir = writeDir, op_all = True)
+    hkg_symb = stockScreener(exchange = 'HKG', ratio_threshold = 3, workDir = writeDir, op_all = True)
 
     symbols = sgx_symb + hkg_symb
     print('selected result: ', symbols)
     # plot the result -------------------------------------------------------#
     for symb in symbols:
         graphStock(symb, 50, 100, writeDir)
-    
-    symb = "2080.HK"
-    graphStock(symb, 50, 100, writeDir)
+
 
