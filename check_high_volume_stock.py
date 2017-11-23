@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from datetime import date as dtlib
 from time import time
 from google_screener_data_extract import GoogleStockDataExtract
-from yahoo_quote_download import yqd
+import pandas_datareader as pdr
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -31,11 +31,17 @@ import pylab
 matplotlib.rcParams.update({'font.size': 9})
 
 
-def stockScreener(exchange = 'SGX', ratio_threshold = 2, op_all = False, op_sele = True, workDir = os.getcwd()):
-    '''
+def screen_stock(exchange='SGX', ratio_threshold=2, op_all=False, op_sele=True, workDir=os.getcwd()):
+    """
     exchange: 'SGX' or 'HKG'
     return: a list of stock symbols
-    '''
+    :param exchange:
+    :param ratio_threshold:
+    :param op_all:
+    :param op_sele:
+    :param workDir:
+    :return:
+    """
     suffix = {'SGX':'.SI', 'HKG': '.HK'}
 
     h = GoogleStockDataExtract(exchange)
@@ -44,7 +50,7 @@ def stockScreener(exchange = 'SGX', ratio_threshold = 2, op_all = False, op_sele
 
     if op_all:
         op_f_all = os.path.join(workDir, datetime.now().strftime('%Y%m%d'),
-        					'checkHighVolume_all' + \
+                            'checkHighVolume_all' + \
                             datetime.now().strftime('%Y%m%d-%H%M') + \
                             '_all_' + exchange + '.csv')
         if not os.path.exists(os.path.dirname(op_f_all)):
@@ -55,16 +61,13 @@ def stockScreener(exchange = 'SGX', ratio_threshold = 2, op_all = False, op_sele
                     raise
         h_df.to_csv(op_f_all, index = False)
 
-    #selection:
+    # selection:
     h_df['ratio'] = h_df['Volume'] / h_df['AverageVolume']
 
     sele = h_df.loc[((h_df['ratio'] >= ratio_threshold) & (h_df['QuotePercChange'] > 0) & \
                     (h_df['QuoteLast'] > h_df['PriceAverage_50Day']) & \
                     (h_df['TotalDebtToEquityQuarter'] < 100)), ]
-                    
-#    sele = h_df.loc[((h_df['ratio'] >= 6) & (h_df['QuotePercChange'] > 0) & \
-#                    (h_df['QuoteLast'] > h_df['PriceAverage_50Day']) & \
-#                    (h_df['TotalDebtToEquityQuarter'] < 100)), ]
+
     if op_sele:
         op_f_sele = os.path.join(workDir, datetime.now().strftime('%Y%m%d'),
         			'checkHighVolume_sele' + \
@@ -109,10 +112,12 @@ def rsiFunc(prices, n=14):
 
     return rsi
 
+
 def movingaverage(values,window):
     weigths = np.repeat(1.0, window)/window
     smas = np.convolve(values, weigths, 'valid')
     return smas # as a numpy array
+
 
 def ExpMovingAverage(values, window):
     weights = np.exp(np.linspace(-1., 0., window))
@@ -120,6 +125,7 @@ def ExpMovingAverage(values, window):
     a =  np.convolve(values, weights, mode='full')[:len(values)]
     a[:window] = a[window]
     return a
+
 
 def computeMACD(x, slow=26, fast=12):
     """
@@ -130,6 +136,7 @@ def computeMACD(x, slow=26, fast=12):
     emafast = ExpMovingAverage(x, fast)
     return emaslow, emafast, emafast - emaslow
 
+
 def graphStock(stock, MA1, MA2, writeDir = os.getcwd()):
     '''
         Use this to dynamically pull a stock:
@@ -137,17 +144,27 @@ def graphStock(stock, MA1, MA2, writeDir = os.getcwd()):
     # pulling data
     try:
         print('Currently Pulling', stock, '...')
-        startDate = (dtlib.today() - timedelta(days = 365)).strftime("%Y%m%d")
-        endDate = dtlib.today().strftime("%Y%m%d")
-        stockFile = yqd.load_yahoo_quote(stock, startDate, endDate)
-        stockFile = sorted(list(set([i for i in stockFile[1:] if not 'null' in i]))) # data cleanning, this API is really bad in data
+        start = (datetime.now() - timedelta(days=2*365)).date()
+        end = dtlib.today()
+        data = pdr.get_data_yahoo(stock, start, end)
+
     except Exception,e:
         print(str(e), 'failed to pull pricing data')
     # plot
     try:
-        date, openp, highp, lowp, closep, closeadjp, volume = np.loadtxt(stockFile,delimiter=',', 
-                                                                         unpack=True, 
-                                                                         converters={ 0: mdates.strpdate2num('%Y-%m-%d')})
+        # date, openp, highp, lowp, closep, closeadjp, volume = np.loadtxt(stockFile,delimiter=',',
+        #                                                                  unpack=True,
+        #                                                                  converters={ 0: mdates.strpdate2num('%Y-%m-%d')})
+        data['Date'] = data.index
+        data['Date'] = mdates.date2num(data['Date'].dt.to_pydatetime())
+        date = np.array(data['Date'])
+        closep = np.array(data['Close'])
+        volume = np.array(data['Volume'])
+        openp = np.array(data['Open'])
+        highp = np.array(data['High'])
+        lowp = np.array(data['Low'])
+
+
         x = 0
         y = len(date)
         newAr = []
@@ -264,10 +281,10 @@ def graphStock(stock, MA1, MA2, writeDir = os.getcwd()):
             except OSError as exc: # Guard against race condition
                 if exc.errno != errno.EEXIST:
                     raise
-        fig.savefig(figNm, dpi = 900, facecolor=fig.get_facecolor())
+        fig.savefig(figNm, dpi=900, facecolor=fig.get_facecolor())
         plt.close('all')
-    except Exception,e:
-        print('main loop:',str(e))
+    except Exception, e:
+        print('main loop:', str(e))
 
     return
 
@@ -276,14 +293,14 @@ if __name__ == "__main__":
 
     currentPath = os.path.abspath(os.path.dirname(sys.argv[0])) # the path of current file
     writeDir = os.path.abspath(os.path.join(currentPath, '..')) # the parent directory
-#    print(currentPath)
-#    print(writeDir)
+    # print(currentPath)
+    # print(writeDir)
 
     #SGX --------------------------------------------------------------------#
-    sgx_symb = stockScreener(exchange = 'SGX', ratio_threshold = 2, workDir = writeDir, op_all = True)
+    sgx_symb = screen_stock(exchange='SGX', ratio_threshold=2, workDir=writeDir, op_all=True)
 
     #HKG --------------------------------------------------------------------#
-    hkg_symb = stockScreener(exchange = 'HKG', ratio_threshold = 3, workDir = writeDir, op_all = True)
+    hkg_symb = screen_stock(exchange='HKG', ratio_threshold=3, workDir=writeDir, op_all=True)
 
     symbols = sgx_symb + hkg_symb
     print('selected result: ', symbols)

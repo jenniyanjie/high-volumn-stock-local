@@ -35,7 +35,8 @@ class GoogleStockDataExtract(object):
 
         """
         ## url parameters for joining
-        self.target_url_start = 'https://www.google.com/finance?output=json&start=0&num=3000&noIL=1&q=[%28exchange%20%3D%3D%20%22#$%22%29%20%26%20%28'
+        # self.target_url_start = 'https://www.google.com/finance?output=json&start=0&num=3000&noIL=1&q=[%28exchange%20%3D%3D%20%22#$%22%29%20%26%20%28'
+        self.target_url_start = 'https://finance.google.com/finance?output=json&start=0&num=3000&noIL=1&q=[%28exchange%20%3D%3D%20%22#$%22%29%20%26%20%28'
         self.target_exchange = exchange
         self.target_url_end = ']&restype=company&ei=nX-hWOiEAY66ugS6k6PADg' # the url is changing with time, from time to time need to update
         self.temp_url_mid = ''
@@ -72,7 +73,10 @@ class GoogleStockDataExtract(object):
     def form_full_url(self):
         """ Form the url"""
         self.target_full_url = self.target_url_start + self.temp_url_mid + self.target_url_end
-        
+        # print(self.target_full_url)
+        # pdb.set_trace()
+
+
     def retrieve_stockdata(self):
         """ Retrieve the json file based on the self.target_full_url"""
         ds = WebJsonRetrieval()
